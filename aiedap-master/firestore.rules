@@ -1,0 +1,54 @@
+rules_version = '2';
+// AIEDAP 모듈5 연수 웹앱 — Firestore 보안 규칙
+// ※ 아래 'teacher@example.com'을 config.js의 instructorEmail과 같은 이메일로 바꾸세요.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'teacher@example.com';
+    }
+
+    function activityOpen(room, qid) {
+      let r = /databases/$(database)/documents/rooms/$(room);
+      return !exists(r) || get(r).data.get('open', {}).get(qid, true) == true;
+    }
+
+    match /rooms/{room} {
+      // 진행 상태: 누구나 읽고, 강사만 바꿈
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+
+      // 별명: 참여자는 자기 별명만 정하고 바꿀 수 있음 (문서 ID = 내 uid)
+      match /people/{uid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'ts'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 12
+          && request.resource.data.ts == request.time;
+        allow delete: if isAdmin();
+      }
+
+      match /responses/{rid} {
+        allow read: if request.auth != null;
+
+        // 참여자는 자기 의견만 쓰고 고칠 수 있음 (문서 ID = 내 uid + '_' + 활동 ID)
+        allow create, update: if request.auth != null
+          && request.resource.data.keys().hasOnly(['uid', 'qid', 'value', 'ts'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.qid in ['q1', 'q2', 'q3', 'q4', 'q5', 'q6']
+          && rid == request.auth.uid + '_' + request.resource.data.qid
+          && request.resource.data.ts == request.time
+          && (!(request.resource.data.value is string) || request.resource.data.value.size() <= 600)
+          && (isAdmin() || activityOpen(room, request.resource.data.qid));
+
+        // 삭제는 강사만
+        allow delete: if isAdmin();
+      }
+    }
+  }
+}
