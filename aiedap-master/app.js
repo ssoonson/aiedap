@@ -138,22 +138,25 @@
         if (!auth.currentUser) await authMod.signInAnonymously(auth);
       } catch (e) { console.error(e); }
     }
-    const cfgEmail = String(CFG.instructorEmail || '').trim().toLowerCase();
-    // config.js의 이메일이 형식에 맞지 않으면(예: 예시 문구 그대로) 무시하고 화면에서 입력한 이메일을 사용
-    const adminEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfgEmail) && !/[^\x00-\x7f]/.test(cfgEmail) ? cfgEmail : '';
+    // 강사 판별: Firestore instructors/{uid} 명단에 있는 계정만 강사(콘솔에서만 등록 가능, firestore.rules도 같은 기준)
+    let admin = false;
+    async function checkAdmin() {
+      const u = auth.currentUser;
+      admin = false;
+      if (!u || u.isAnonymous) return false;
+      try { admin = (await fs.getDoc(fs.doc(db, 'instructors', u.uid))).exists(); } catch (e) { admin = false; }
+      return admin;
+    }
+    await checkAdmin();
     const roomRef = r => fs.doc(db, 'rooms', r);
     const respCol = r => fs.collection(db, 'rooms', r, 'responses');
     const onErr = e => { console.error(e); toast('연결 오류: ' + (e.code || e.message)); };
     return {
       demo: false,
       uid: () => auth.currentUser && auth.currentUser.uid,
-      isAdmin: () => {
-        const u = auth.currentUser;
-        if (!u || u.isAnonymous || !u.email) return false;
-        return !adminEmail || u.email.toLowerCase() === adminEmail;
-      },
+      isAdmin: () => admin,
       async loginAdmin(pw, email) {
-        const em = String(email || adminEmail || '').trim().toLowerCase();
+        const em = String(email || '').trim().toLowerCase();
         if (!em) throw new Error('강사 이메일을 입력해 주세요.');
         try {
           // 강사 로그인은 이 탭에만 유지 — 탭·브라우저를 닫으면 로그아웃(연수장 공용 PC 대비)
@@ -164,17 +167,17 @@
           await toStudent(false);
           const c = e.code || '';
           if (/invalid-email/.test(c)) throw new Error('이메일 형식이 올바르지 않아요. 띄어쓰기나 오타를 확인해 주세요.');
-          if (/password|credential|user-not-found/.test(c)) throw new Error('이메일 또는 비밀번호가 맞지 않아요. Firebase > Authentication > 사용자에 있는 계정인지 확인해 주세요.');
+          if (/password|credential|user-not-found/.test(c)) throw new Error('이메일 또는 비밀번호가 맞지 않아요.');
           if (/too-many-requests/.test(c)) throw new Error('시도가 너무 많아요. 잠시 뒤 다시 해 주세요.');
           if (/operation-not-allowed/.test(c)) throw new Error('Firebase > Authentication > 로그인 방법에서 "이메일/비밀번호"를 켜 주세요.');
           throw new Error('로그인 실패: ' + (c || e.message));
         }
-        if (adminEmail && em !== adminEmail) {
+        if (!await checkAdmin()) {
           await toStudent(true);
-          throw new Error('이 계정은 config.js의 instructorEmail과 달라요. 두 이메일을 같게 맞춰 주세요.');
+          throw new Error('강사로 등록되지 않은 계정이에요. Firestore의 instructors 명단에 이 계정의 UID가 있는지 확인해 주세요.');
         }
       },
-      async logoutAdmin() { await toStudent(true); },
+      async logoutAdmin() { admin = false; await toStudent(true); },
       onRoom(r, fn) { fs.onSnapshot(roomRef(r), s => fn(s.exists() ? s.data() : null), onErr); },
       onResponses(r, fn) {
         fs.onSnapshot(respCol(r), qs => fn(qs.docs.map(d => {
