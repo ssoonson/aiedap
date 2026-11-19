@@ -49,6 +49,7 @@ PPT 「마스터교원의 지속적 전문성 개발」의 흐름(물길 0~5)에
    - 위치: `asia-northeast3 (서울)` 권장 · 프로덕션 모드로 시작
 6. **보안 규칙 넣기** — Firestore > 규칙 탭에 `firestore.rules` 내용을 통째로 붙여넣고,
    `teacher@example.com`을 4번의 강사 이메일로 바꾼 뒤 **게시**
+   - ⚠ 이 Firebase 프로젝트는 「AI 창작 따라하기」 페이지([ssoonson/ai-creative-guide](https://github.com/ssoonson/ai-creative-guide))도 함께 씁니다. `firestore.rules`는 두 웹앱의 규칙을 합친 파일이니 **일부만 잘라 붙이지 말고 항상 전체를 게시**하세요. 두 저장소의 `firestore.rules`는 같은 내용입니다.
 
 규칙 요약: 연수생은 자기 의견만 쓰고 고칠 수 있고(마감된 활동은 불가), 진행 상태 변경·의견 삭제는 강사 계정만 할 수 있어요.
 
