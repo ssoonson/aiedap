@@ -29,6 +29,17 @@
     q6: { n: 6, type: 'short', short: '한 문장 정의', title: 'AX 시대의 교사 전문성은 ______ 이다.', hint: '빈칸에 들어갈 말을 짧게 채워 주세요.', max: 30 }
   };
   const QIDS = Object.keys(ACTS);
+  // 형식이 맞지 않는 응답(개발자 도구로 넣은 값 등)은 화면에 쓰지 않음 — firestore.rules의 validValue와 같은 기준
+  const COMP_KEYS = COMPS.map(c => c[0]);
+  const okLevel = l => Number.isInteger(l) && l >= 1 && l <= 6;
+  const okComps = c => Array.isArray(c) && c.length >= 1 && c.length <= 2 && c.every(k => COMP_KEYS.includes(k));
+  function validResponse(r) {
+    const a = r && ACTS[r.qid], v = r && r.value;
+    if (!a || typeof r.uid !== 'string') return false;
+    if (a.type === 'text' || a.type === 'short') return typeof v === 'string' && v.trim().length > 0 && v.length <= a.max;
+    if (!v || typeof v !== 'object' || Array.isArray(v) || !okLevel(v.level)) return false;
+    return a.type === 'level' || (okComps(v.strong) && okComps(v.weak));
+  }
   const STEPS = [
     { id: 's0', name: '시작하기', sec: true },
     { id: 's1', name: '1. 전문성 개발이 필요한 이유', sec: true },
@@ -119,6 +130,14 @@
         else authMod.signInAnonymously(auth).catch(err => { un(); reject(err); });
       });
     });
+    // 강사 로그인을 끝내고 연수생(익명) 상태로 돌아감 — 연수생 로그인은 원래대로 브라우저에 유지
+    async function toStudent(signOut) {
+      try {
+        if (signOut) await authMod.signOut(auth);
+        await authMod.setPersistence(auth, authMod.indexedDBLocalPersistence);
+        if (!auth.currentUser) await authMod.signInAnonymously(auth);
+      } catch (e) { console.error(e); }
+    }
     const cfgEmail = String(CFG.instructorEmail || '').trim().toLowerCase();
     // config.js의 이메일이 형식에 맞지 않으면(예: 예시 문구 그대로) 무시하고 화면에서 입력한 이메일을 사용
     const adminEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfgEmail) && !/[^\x00-\x7f]/.test(cfgEmail) ? cfgEmail : '';
@@ -136,8 +155,13 @@
       async loginAdmin(pw, email) {
         const em = String(email || adminEmail || '').trim().toLowerCase();
         if (!em) throw new Error('강사 이메일을 입력해 주세요.');
-        try { await authMod.signInWithEmailAndPassword(auth, em, pw); }
+        try {
+          // 강사 로그인은 이 탭에만 유지 — 탭·브라우저를 닫으면 로그아웃(연수장 공용 PC 대비)
+          await authMod.setPersistence(auth, authMod.browserSessionPersistence);
+          await authMod.signInWithEmailAndPassword(auth, em, pw);
+        }
         catch (e) {
+          await toStudent(false);
           const c = e.code || '';
           if (/invalid-email/.test(c)) throw new Error('이메일 형식이 올바르지 않아요. 띄어쓰기나 오타를 확인해 주세요.');
           if (/password|credential|user-not-found/.test(c)) throw new Error('이메일 또는 비밀번호가 맞지 않아요. Firebase > Authentication > 사용자에 있는 계정인지 확인해 주세요.');
@@ -146,11 +170,11 @@
           throw new Error('로그인 실패: ' + (c || e.message));
         }
         if (adminEmail && em !== adminEmail) {
-          await authMod.signOut(auth); await authMod.signInAnonymously(auth);
+          await toStudent(true);
           throw new Error('이 계정은 config.js의 instructorEmail과 달라요. 두 이메일을 같게 맞춰 주세요.');
         }
       },
-      async logoutAdmin() { await authMod.signOut(auth); await authMod.signInAnonymously(auth); },
+      async logoutAdmin() { await toStudent(true); },
       onRoom(r, fn) { fs.onSnapshot(roomRef(r), s => fn(s.exists() ? s.data() : null), onErr); },
       onResponses(r, fn) {
         fs.onSnapshot(respCol(r), qs => fn(qs.docs.map(d => {
@@ -535,7 +559,9 @@
       const comp = arr => (arr || []).map(k => `${k} ${COMP_NAME[k]}`).join(' / ');
       rows.push(['참여자 ' + idx[uid], S.people[uid] || '', fmt(first), get('q1') || '', q2.level ? 'Lv.' + q2.level : '', comp(q2.strong), comp(q2.weak), q3.level ? 'Lv.' + q3.level : '', get('q4') || '', get('q5') || '', get('q6') || '']);
     });
-    const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    // 엑셀 수식 실행 방지: =, +, -, @, 탭, 줄바꿈으로 시작하는 값 앞에 ' 를 붙임
+    const cell = c => { const t = String(c); return /^[=+\-@\t\r]/.test(t) ? "'" + t : t; };
+    const csv = '﻿' + rows.map(r => r.map(c => `"${cell(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     const d = new Date(), p = n => String(n).padStart(2, '0');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -745,7 +771,7 @@
     }
     if (!S.store.demo) { const em = String(CFG.instructorEmail || '').trim(); if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) && !/[^\x00-\x7f]/.test(em)) $('#gate-email').value = em; }
     S.store.onRoom(ROOM, d => { S.room = Object.assign({ current: null, follow: true, showPeers: true, open: {} }, d || {}); renderAll(); });
-    S.store.onResponses(ROOM, list => { S.responses = list; renderAll(); });
+    S.store.onResponses(ROOM, list => { S.responses = list.filter(validResponse); renderAll(); });
     S.store.onPeople(ROOM, map => { S.people = map || {}; S.peopleLoaded = true; renderAll(); renderNameChip(); maybeAskName(); });
     setRole(location.hash === '#instructor' ? 'instructor' : 'student');
     if (S.store.isAdmin()) ensureRoom();

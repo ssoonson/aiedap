@@ -25,6 +25,27 @@ service cloud.firestore {
       return !exists(r) || get(r).data.get('open', {}).get(qid, true) == true;
     }
 
+    // 문항별 응답 형식 (app.js의 validResponse와 같은 기준)
+    //   q1 서술 300자 · q4/q5 서술 400자 · q6 빈칸 30자
+    //   q2 { level: 1~6, strong: [A~G 1~2개], weak: [A~G 1~2개] } · q3 { level: 1~6 }
+    function validValue(qid, v) {
+      return (qid == 'q1' && validText(v, 300))
+        || ((qid == 'q4' || qid == 'q5') && validText(v, 400))
+        || (qid == 'q6' && validText(v, 30))
+        || (qid == 'q2' && v is map
+            && v.keys().hasOnly(['level', 'strong', 'weak'])
+            && v.keys().hasAll(['level', 'strong', 'weak'])
+            && validLevel(v.level) && validComps(v.strong) && validComps(v.weak))
+        || (qid == 'q3' && v is map && v.keys().hasOnly(['level']) && v.keys().hasAll(['level'])
+            && validLevel(v.level));
+    }
+    function validText(v, max) { return v is string && v.size() >= 1 && v.size() <= max; }
+    function validLevel(l) { return l is int && l >= 1 && l <= 6; }
+    function validComps(c) {
+      return c is list && c.size() >= 1 && c.size() <= 2
+        && c.hasOnly(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    }
+
     match /rooms/{room} {
       // 진행 상태: 누구나 읽고, 강사만 바꿈
       allow read: if request.auth != null;
@@ -53,7 +74,7 @@ service cloud.firestore {
           && request.resource.data.qid in ['q1', 'q2', 'q3', 'q4', 'q5', 'q6']
           && rid == request.auth.uid + '_' + request.resource.data.qid
           && request.resource.data.ts == request.time
-          && (!(request.resource.data.value is string) || request.resource.data.value.size() <= 600)
+          && validValue(request.resource.data.qid, request.resource.data.value)
           && (isAdmin() || activityOpen(room, request.resource.data.qid));
 
         // 삭제는 강사만
