@@ -1,6 +1,7 @@
 rules_version = '2';
 // AIEDAP 모듈5 연수 웹앱 — Firestore 보안 규칙
-// ※ 아래 'teacher@example.com'을 config.js의 instructorEmail과 같은 이메일로 바꾸세요.
+// ※ Firebase 콘솔 > Firestore > 규칙에 붙여 넣을 때만 'teacher@example.com'을 강사 이메일로 바꾸세요.
+//   저장소의 이 파일과 config.js에는 실제 이메일을 적지 마세요(누구나 볼 수 있음).
 service cloud.firestore {
   match /databases/{database}/documents {
 
