@@ -84,6 +84,7 @@
     const read = r => { let d; try { d = JSON.parse(ls.get(key(r))); } catch (e) { } d = d || {}; return { room: d.room || null, responses: d.responses || {}, people: d.people || {} }; };
     const subs = [];
     const emit = r => subs.filter(s => s.room === r).forEach(s => s.fn(read(r)));
+    const unsub = s => () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); };
     const write = (r, data) => { ls.set(key(r), JSON.stringify(data)); emit(r); };
     const PFX = 'aiedap-cpd-demo:';
     window.addEventListener('storage', e => { if (e.key && e.key.startsWith(PFX)) emit(e.key.slice(PFX.length)); });
@@ -96,8 +97,15 @@
       async loginAdmin(pw, email) { if (pw !== String(CFG.demoPassword || '1234')) throw new Error('비밀번호가 맞지 않아요.'); admin = true; try { sessionStorage.setItem('cpd-demo-admin', '1'); } catch (e) { } },
       async logoutAdmin() { admin = false; try { sessionStorage.removeItem('cpd-demo-admin'); } catch (e) { } },
       onRoom(r, fn) { const s = { room: r, fn: d => fn(d.room) }; subs.push(s); fn(read(r).room); },
-      onResponses(r, fn) { const s = { room: r, fn: d => fn(Object.entries(d.responses).map(([id, v]) => ({ id, ...v }))) }; subs.push(s); s.fn(read(r)); },
-      onPeople(r, fn) { const s = { room: r, fn: d => fn(Object.fromEntries(Object.entries(d.people).map(([u, v]) => [u, v.name]))) }; subs.push(s); s.fn(read(r)); },
+      onResponses(r, fn, opt = {}) {
+        const s = { room: r, fn: d => fn(Object.entries(d.responses).map(([id, v]) => ({ id, ...v })).filter(x => !opt.mineOnly || x.uid === uid)) };
+        subs.push(s); s.fn(read(r)); return unsub(s);
+      },
+      onPeople(r, fn, opt = {}) {
+        const s = { room: r, fn: d => fn(Object.fromEntries(Object.entries(d.people).filter(([u]) => !opt.mineOnly || u === uid).map(([u, v]) => [u, v.name]))) };
+        subs.push(s); s.fn(read(r)); return unsub(s);
+      },
+      async getPeople(r) { return Object.fromEntries(Object.entries(read(r).people).map(([u, v]) => [u, v.name])); },
       async setName(r, name) { const d = read(r); d.people[uid] = { name, ts: Date.now() }; write(r, d); },
       async setRoom(r, patch) {
         const d = read(r); const cur = d.room || {};
@@ -123,7 +131,11 @@
     ]);
     const app = appMod.initializeApp(cfg);
     const auth = authMod.getAuth(app);
-    const db = fs.getFirestore(app);
+    // 받은 내용을 기기에 저장해 두면 새로고침·재접속 때 바뀐 문서만 다시 읽음(읽기 횟수 절약).
+    // IndexedDB를 못 쓰는 브라우저(일부 인앱·사생활 보호 모드)는 SDK가 알아서 메모리 캐시로 동작.
+    let db;
+    try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+    catch (e) { console.warn('Firestore 캐시를 켜지 못해 기본 설정으로 연결합니다.', e); db = fs.getFirestore(app); }
     await new Promise((resolve, reject) => {
       const un = authMod.onAuthStateChanged(auth, u => {
         if (u) { un(); resolve(u); }
@@ -150,6 +162,8 @@
     await checkAdmin();
     const roomRef = r => fs.doc(db, 'rooms', r);
     const respCol = r => fs.collection(db, 'rooms', r, 'responses');
+    // 캐시 → 서버 확인으로 바뀔 때도 알림 받기(읽기 비용 없음). 캐시에 없던 별명·진행 상태를 서버에서 확인하는 데 필요
+    const MD = { includeMetadataChanges: true };
     const onErr = e => { console.error(e); toast('연결 오류: ' + (e.code || e.message)); };
     return {
       demo: false,
@@ -178,13 +192,21 @@
         }
       },
       async logoutAdmin() { admin = false; await toStudent(true); },
-      onRoom(r, fn) { fs.onSnapshot(roomRef(r), s => fn(s.exists() ? s.data() : null), onErr); },
-      onResponses(r, fn) {
-        fs.onSnapshot(respCol(r), qs => fn(qs.docs.map(d => {
+      // 기기 캐시에 진행 상태가 없을 때 "기본값(공개 켜짐)"으로 착각해 전체 구독을 시작하지 않도록 서버 응답을 기다림
+      onRoom(r, fn) { fs.onSnapshot(roomRef(r), MD, s => { if (s.metadata.fromCache && !s.exists()) return; fn(s.exists() ? s.data() : null); }, onErr); },
+      // mineOnly: 내 문서만 구독 — 다른 의견을 보여 주지 않을 때 연수생 기기의 읽기 횟수를 크게 줄임
+      onResponses(r, fn, opt = {}) {
+        const q = opt.mineOnly ? fs.query(respCol(r), fs.where('uid', '==', auth.currentUser.uid)) : respCol(r);
+        return fs.onSnapshot(q, qs => fn(qs.docs.map(d => {
           const x = d.data(); return { id: d.id, uid: x.uid, qid: x.qid, value: x.value, ts: x.ts && x.ts.toMillis ? x.ts.toMillis() : Date.now() };
         })), onErr);
       },
-      onPeople(r, fn) { fs.onSnapshot(fs.collection(db, 'rooms', r, 'people'), qs => fn(Object.fromEntries(qs.docs.map(d => [d.id, d.data().name]))), onErr); },
+      onPeople(r, fn, opt = {}) {
+        const meta = s => ({ fromCache: s.metadata.fromCache });
+        if (opt.mineOnly) return fs.onSnapshot(fs.doc(db, 'rooms', r, 'people', auth.currentUser.uid), MD, s => fn(s.exists() ? { [s.id]: s.data().name } : {}, meta(s)), onErr);
+        return fs.onSnapshot(fs.collection(db, 'rooms', r, 'people'), MD, qs => fn(Object.fromEntries(qs.docs.map(d => [d.id, d.data().name])), meta(qs)), onErr);
+      },
+      async getPeople(r) { const qs = await fs.getDocs(fs.collection(db, 'rooms', r, 'people')); return Object.fromEntries(qs.docs.map(d => [d.id, d.data().name])); },
       async setName(r, name) { await fs.setDoc(fs.doc(db, 'rooms', r, 'people', auth.currentUser.uid), { name, ts: fs.serverTimestamp() }); },
       async setRoom(r, patch) { await fs.setDoc(roomRef(r), { ...patch, updatedAt: fs.serverTimestamp() }, { merge: true }); },
       async saveResponse(r, qid, value) {
@@ -606,7 +628,9 @@
         e.preventDefault();
         const v = inp.value.replace(/\s+/g, ' ').trim();
         if (v.length < 1) { err.textContent = '별명을 입력해 주세요.'; err.hidden = false; return; }
-        const taken = Object.entries(S.people).some(([u, n]) => u !== S.store.uid() && String(n).toLowerCase() === v.toLowerCase());
+        let all = S.people;
+        if (S.subMode !== 'all') { try { all = await S.store.getPeople(ROOM); } catch (ex) { console.error(ex); } }
+        const taken = Object.entries(all).some(([u, n]) => u !== S.store.uid() && String(n).toLowerCase() === v.toLowerCase());
         if (taken) { err.textContent = '이미 다른 선생님이 쓰는 별명이에요. 다른 별명을 지어 주세요.'; err.hidden = false; return; }
         try { await S.store.setName(ROOM, v); S.people[S.store.uid()] = v; renderNameChip(); renderAll(); toast(`${v} 님, 반가워요!`); done(true); }
         catch (ex) { console.error(ex); err.textContent = '저장하지 못했어요: ' + (ex.code || ex.message); err.hidden = false; }
@@ -652,10 +676,10 @@
     $('#gate-form').onsubmit = async e => {
       e.preventDefault();
       const err = $('#gate-err'); err.hidden = true;
-      try { await S.store.loginAdmin($('#gate-pw').value, $('#gate-email').value); $('#gate-pw').value = ''; await ensureRoom(); renderInstructor(); renderAll(); }
+      try { await S.store.loginAdmin($('#gate-pw').value, $('#gate-email').value); $('#gate-pw').value = ''; syncSubs(); await ensureRoom(); renderInstructor(); renderAll(); }
       catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
-    $('#btn-logout').onclick = async () => { await guard(S.store.logoutAdmin()); renderInstructor(); renderAll(); };
+    $('#btn-logout').onclick = async () => { await guard(S.store.logoutAdmin()); syncSubs(); renderInstructor(); renderAll(); };
     $('#btn-qr').onclick = openQR;
     $('#my-name').onclick = () => askName();
     $('#btn-csv').onclick = downloadCSV;
@@ -741,6 +765,28 @@
     return { responses: out, people };
   }
 
+  /* ---------------- 구독 관리 ----------------
+     강사(명단에 있는 계정)와 "다른 의견 공개"가 켜진 동안의 연수생만 전체 의견·별명을 받고,
+     공개가 꺼진 동안 연수생은 자기 의견·별명만 받는다. 60명 규모에서 읽기 횟수가 크게 줄어든다. */
+  function syncSubs() {
+    if (!S.roomLoaded) return;   // 진행 상태를 읽기 전에 전체 구독을 시작하지 않음
+    const mode = (S.store.isAdmin() || S.room.showPeers !== false) ? 'all' : 'mine';
+    if (mode === S.subMode) return;
+    S.subMode = mode;
+    (S.unsubs || []).forEach(u => { try { u && u(); } catch (e) { } });
+    const opt = { mineOnly: mode === 'mine' };
+    S.unsubs = [
+      S.store.onResponses(ROOM, list => { if (S.subMode !== mode) return; S.responses = list.filter(validResponse); renderAll(); }, opt),
+      S.store.onPeople(ROOM, (map, meta) => {
+        if (S.subMode !== mode) return;
+        S.people = map || {};
+        // 기기 캐시만 보고 "별명 없음"으로 판단해 별명 창을 띄우지 않도록, 서버 확인 후에 loaded 처리
+        if (!(meta && meta.fromCache) || myName()) S.peopleLoaded = true;
+        renderAll(); renderNameChip(); maybeAskName();
+      }, opt)
+    ];
+  }
+
   /* ---------------- 시작 ---------------- */
   async function init() {
     renderStatic();
@@ -773,9 +819,7 @@
       $('#gate-email').hidden = true;
     }
     if (!S.store.demo) { const em = String(CFG.instructorEmail || '').trim(); if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) && !/[^\x00-\x7f]/.test(em)) $('#gate-email').value = em; }
-    S.store.onRoom(ROOM, d => { S.room = Object.assign({ current: null, follow: true, showPeers: true, open: {} }, d || {}); renderAll(); });
-    S.store.onResponses(ROOM, list => { S.responses = list.filter(validResponse); renderAll(); });
-    S.store.onPeople(ROOM, map => { S.people = map || {}; S.peopleLoaded = true; renderAll(); renderNameChip(); maybeAskName(); });
+    S.store.onRoom(ROOM, d => { S.room = Object.assign({ current: null, follow: true, showPeers: true, open: {} }, d || {}); S.roomLoaded = true; syncSubs(); renderAll(); });
     setRole(location.hash === '#instructor' ? 'instructor' : 'student');
     if (S.store.isAdmin()) ensureRoom();
     setInterval(() => { if (S.role === 'instructor' && S.admin) renderResults(); }, 60000);
