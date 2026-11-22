@@ -32,6 +32,7 @@ window.APP_CONFIG = {
   instructor: { name: "손우재", org: "경남권역 명진초등학교" },
 
   // ⑥ 마무리 단계 링크
-  postSurvey: { code: "58SMRVK", url: "https://www.aiedap.or.kr" },
-  satisfaction: { label: "숏.한국/아이에답/", url: "https://숏.한국/아이에답/" }
+  //    postSurvey: 사후 역량 측정 코드와 측정 사이트 · satisfaction: 만족도 조사 주소(버튼을 누르면 이동)
+  postSurvey: { code: "XTB4233H", url: "https://www.aiedap.or.kr" },
+  satisfaction: { url: "https://forms.gle/VHu2M5uKCBgwV97u5" }
 };

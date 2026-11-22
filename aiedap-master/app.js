@@ -696,7 +696,7 @@
     $('#sw-follow').onchange = e => guard(S.store.setRoom(ROOM, { follow: e.target.checked }));
     $('#sw-peers').onchange = e => guard(S.store.setRoom(ROOM, { showPeers: e.target.checked }));
     $('#live-go').onclick = () => S.room.current && scrollToStep(S.room.current);
-    $('#copy-code').onclick = () => copyText(CFG.postSurvey && CFG.postSurvey.code || '58SMRVK', '역량코드를 복사했어요');
+    $('#copy-code').onclick = () => copyText(CFG.postSurvey && CFG.postSurvey.code || 'XTB4233H', '역량코드를 복사했어요');
     addEventListener('scroll', () => { updateBannerVisibility(); }, { passive: true });
     addEventListener('keydown', e => {
       if (S.present && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
@@ -729,7 +729,7 @@
     if (CFG.courseTitle) { $('#course-title').textContent = CFG.courseTitle; $('#foot-course').textContent = CFG.courseTitle; }
     if (CFG.instructor) $('#hero-instructor').textContent = `강사 ${CFG.instructor.name} · ${CFG.instructor.org}`;
     if (CFG.postSurvey) { $('#post-code').textContent = CFG.postSurvey.code; $('#post-link').href = CFG.postSurvey.url; }
-    if (CFG.satisfaction) { $('#sat-link').href = CFG.satisfaction.url; $('#sat-link').textContent = CFG.satisfaction.label + ' ↗'; }
+    if (CFG.satisfaction && CFG.satisfaction.url) $('#sat-link').href = CFG.satisfaction.url;
     $$('.act[data-q]').forEach(buildActivity);
   }
   async function ensureRoom() {

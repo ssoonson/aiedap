@@ -188,8 +188,6 @@ details.gi li strong{color:#fff}
 .btn.primary:disabled{background:#9BB0CC;border-color:#9BB0CC;cursor:not-allowed}
 .btn.sm{padding:6px 12px;font-size:13.5px}
 .btn.danger{color:var(--danger);border-color:#F0C7BF}
-.qr-sat{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:center}
-.qr-sat img{border-radius:12px;border:1px solid var(--line)}
 .thanks{text-align:center;padding:40px 20px;background:linear-gradient(160deg,#00306C,#0B5BB5);color:#fff;border:0}
 .thanks img{width:140px;margin:0 auto 10px}
 .thanks h3{color:#fff;font-size:28px;margin:0}
@@ -406,8 +404,6 @@ footer{background:#0A1F44;color:#BFD0EA;font-size:14px}
   .hero h1{padding-right:84px}
   .card,.act{padding:18px}
   .toc{grid-template-columns:1fr}
-  .qr-sat{grid-template-columns:1fr}
-  .qr-sat img{width:150px}
   .ins-wrap{padding:16px 16px 60px}
   .col-labels img{width:32px;height:32px}
   .col-labels small{display:none}
@@ -653,7 +649,7 @@ footer{background:#0A1F44;color:#BFD0EA;font-size:14px}
           <span class="kicker">사후 역량 측정하기</span>
           <h3>aiedap.or.kr에서 역량코드를 입력해 주세요</h3>
           <div class="code-box">
-            <span class="code" id="post-code">58SMRVK</span>
+            <span class="code" id="post-code">XTB4233H</span>
             <button class="btn sm" id="copy-code" type="button">코드 복사</button>
             <a class="btn sm primary" id="post-link" href="https://www.aiedap.or.kr" target="_blank" rel="noopener">측정하러 가기 ↗</a>
           </div>
@@ -661,14 +657,9 @@ footer{background:#0A1F44;color:#BFD0EA;font-size:14px}
         </div>
         <div class="card">
           <span class="kicker">만족도 조사</span>
-          <div class="qr-sat">
-            <img width="320" height="320" src="assets/qr-satisfaction.png" alt="만족도 조사 QR 코드">
-            <div>
-              <h3>연수 만족도 조사에 참여해 주세요</h3>
-              <p>QR을 찍거나 아래 주소로 접속하세요.</p>
-              <a class="btn primary block" id="sat-link" href="https://숏.한국/아이에답/" target="_blank" rel="noopener">숏.한국/아이에답/ ↗</a>
-            </div>
-          </div>
+          <h3>연수 만족도 조사에 참여해 주세요</h3>
+          <p>아래 버튼을 누르면 설문 페이지로 이동해요.</p>
+          <a class="btn primary block" id="sat-link" href="https://forms.gle/VHu2M5uKCBgwV97u5" target="_blank" rel="noopener">만족도 조사 참여하기 ↗</a>
         </div>
       </div>
       <div class="card thanks block">
