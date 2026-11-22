@@ -178,6 +178,9 @@ details.gi li strong{color:#fff}
 .g23 .mid{display:grid;place-items:center;color:var(--navy-2);font-size:22px;font-weight:900}
 
 /* closing */
+.ice h3{margin:2px 0 6px}
+.ice p{color:var(--ink-2);margin:0 0 12px}
+.ice-prompt{white-space:pre-line;background:var(--sky-2);border-radius:12px;padding:16px 18px;font-size:15px;line-height:1.7;color:var(--ink);margin-bottom:14px;max-height:260px;overflow:auto}
 .code-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
 .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:28px;font-weight:800;letter-spacing:.12em;color:var(--navy);background:var(--sky-2);border-radius:var(--r-sm);padding:6px 16px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line-2);background:#fff;color:var(--navy-ink);font-weight:700;border-radius:999px;padding:9px 16px;font-size:15px;text-decoration:none;transition:background .15s,border-color .15s,transform .1s}
@@ -486,6 +489,23 @@ footer{background:#0A1F44;color:#BFD0EA;font-size:14px}
             <a href="#s4"><b>물길 4</b><span>전문성 개발 계획 탐색하기</span></a>
           </div>
         </div>
+      </div>
+      <div class="card block ice">
+        <span class="kicker">아이스브레이킹</span>
+        <h3>AI의 눈에 비친 나는 어떤 모습일까요?</h3>
+        <p>평소 자주 대화하는 AI(이미지를 그릴 수 있는 AI)에 아래 문장을 복사해 붙여 넣어 보세요.</p>
+        <div class="ice-prompt" id="ice-prompt">지금까지 우리가 나눈 대화와 네가 기억하고 있는 나에 대한 정보를 종합해, 너라는 AI의 시선에서 내가 어떤 사람으로 보이는지 하나의 이미지로 그려줘.
+
+내가 스스로 생각하는 모습이 아니라, 수많은 질문과 대답을 통해 네가 관찰한 나의 모습을 표현해 줘.
+
+내가 무엇에 호기심을 느끼고, 어떤 문제에 집착하며, 무엇을 중요하게 생각하고, 어떤 방식으로 세상을 이해하려 하는지 이미지에 담아줘.
+
+나의 장점뿐 아니라 불완전함, 고민, 서로 상충하는 성향도 자연스럽게 드러내 줘.
+
+단순한 인물 초상화나 관심사 콜라주가 아닌, 내가 살아가는 세계와 사고방식이 하나의 장면에 응축된 예술 작품으로 만들어 줘.
+
+실제 대화에서 확인할 수 있는 정보에 근거하고, 미화하거나 과장하지 마. 별도의 설명 없이 이미지 한 장만 생성해 줘.</div>
+        <button class="btn primary" id="copy-ice" type="button">📋 문장 복사하기</button>
       </div>
     </section>
 

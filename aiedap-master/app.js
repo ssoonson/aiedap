@@ -696,6 +696,7 @@
     $('#sw-follow').onchange = e => guard(S.store.setRoom(ROOM, { follow: e.target.checked }));
     $('#sw-peers').onchange = e => guard(S.store.setRoom(ROOM, { showPeers: e.target.checked }));
     $('#live-go').onclick = () => S.room.current && scrollToStep(S.room.current);
+    $('#copy-ice').onclick = () => copyText($('#ice-prompt').textContent.trim(), '문장을 복사했어요. AI 대화창에 붙여 넣어 보세요');
     $('#copy-code').onclick = () => copyText(CFG.postSurvey && CFG.postSurvey.code || 'XTB4233H', '역량코드를 복사했어요');
     addEventListener('scroll', () => { updateBannerVisibility(); }, { passive: true });
     addEventListener('keydown', e => {
